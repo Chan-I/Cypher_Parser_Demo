@@ -1,14 +1,12 @@
-%option noyywrap yylineno case-insensitive
+%option noyywrap yylineno case-insensitive nodefault
 
 %{
-//#include "glrmysql.tab.h"
+#include "test.tab.h"
 #include <stdarg.h>
 #include <string.h>
 
-void yyerror(char *s, ...);
-
+void yyerror(const char *s, ...);
 int oldstate;
-
 %}
 
 %x COMMENT
@@ -16,110 +14,70 @@ int oldstate;
 
 %%
 
+AS          { return AS;         }
+ANY         { return ANY;        }
+ALL         { return ALL;        }
+MATCH       { return MATCH;      }
+RETURN      { return RETURN;     }
+DESC        { return DESC;       }
+ASC         { return ASC;        }
+DISTINCT    { return DISTINCT;   } 
+ORDER       { return ORDER;      }
+BY          { return BY;         }
+LIMIT       { return LIMIT;      }
+MERGE       { return MERGE;      }
+ON          { return ON;         }
+WHERE       { return WHERE;      }
+WITH        { return WITH;       }
+UNIONS      { return UNIONS;     }
+AND         { return AND;        }
+ENDS        { return ENDS;       }
+IN          { return IN;         }
+IS          { return IS;         }
+NOT         { return NOT;        }
+OR          { return OR;         }
+XOR         { return XOR;        }
+NULL        { return NULLX;      }
+COUNT       { return COUNT;      }
+EXISTS      { return EXISTS;     }
+CONTAINS    { return CONTAINS;   }
+TRUE    { yylval.intval = 1; return BOOL; }
+FALSE   { yylval.intval = 0; return BOOL; }
 
 
-  /* Hack for BETWEEN ... AND ... 
-   * return special AND token if BETWEEN seen
-   */
-ADD         { printf(" ADD ");       }
-ALL         { printf(" ALL ");       }
-AS          { printf(" AS ");        }
-ASC         { printf(" ASC ");       }
-ANY			{ printf( "ANY ");		 }
-ASCENDING   { printf(" ASCENDING "); }
-BY          { printf(" BY ");        }
-CASE        { printf(" CASE ");      }
-CONSTRAINT  { printf(" CONSTRAINT ");}
-CONTAINS    { printf(" CONTAINS ");  }
-CREATE      { printf(" CREATE ");    }
-DELETE      { printf(" DELETE ");    }
-DESC        { printf(" DESC ");      }
-DESCENDING  { printf(" DESCENDING ");}
-DETACH      { printf(" DETACH ");    }
-DISTINCT    { printf(" DISTINCT ");  }
-DO          { printf(" DO ");        }
-DROP        { printf(" DROP ");      }
-ELSE        { printf(" ELSE ");      }
-END         { printf(" END ");       }
-ENDS        { printf(" ENDS ");      }
-EXISTS      { printf(" EXISTS ");    }
-FOR         { printf(" FOR ");       }
-IN          { printf(" IN ");        }
-IS          { printf(" IS ");        }
-LIMIT       { printf(" LIMIT ");     }
-MANDATORY   { printf(" MANDATORY "); }
-MATCH       { printf(" MATCH ");     }
-MERGE       { printf(" MERGE ");     }
-OF          { printf(" OF ");        }
-ON          { printf(" ON ");        }
-OPTIONAL    { printf(" OPTIONAL ");  }
-ORDER       { printf(" ORDER ");     }
-REMOVE      { printf(" REMOVE ");    }
-REQUIRE     { printf(" REQUIRE ");   }
-RETURN      { printf(" RETURN ");    }
-SCALAR      { printf(" SCALAR ");    }
-SET         { printf(" SET ");       }
-SKIP        { printf(" SKIP ");      }
-STARTS      { printf(" STARTS ");    }
-THEN        { printf(" THEN ");      }
-UNION       { printf(" UNION ");     }
-UNIQUE      { printf(" UNIQUE ");    }
-UNWIND      { printf(" UNWIND ");    }
-WHEN        { printf(" WHEN ");      }
-WHERE       { printf(" WHERE ");     }
-WITH        { printf(" WITH ");      }
+[A-Za-z][A-Za-z0-9_]*	{ yylval.strval = strdup(yytext); return NAME; }
 
-AND			{ printf("AND ");		}	
-OR			{ printf("OR ");		}	
-XOR			{ printf("XOR ");		}	
-NOT			{ printf("NOT ");		}	
-
-COUNT	{ printf("COUNT"); }
-TRUE	{ printf("BOOL "); }
-UNKNOWN	{ printf("BOOL ");	}
-FALSE	{ printf("BOOL "); }
-
-[A-Za-z][A-Za-z0-9_]*	{ printf("NAME"); }
-
-   /* numbers */
-[0-9]*	        { printf("NUMBER "); } 
-
-[0-9]+"."[0-9]+([Ee][-+]?[0-9]+)?	{ printf("APPROXNUM "); }
+   /* numbers */ 
+[0-9]*	{yylval.intval = atoi(yytext); return INTNUM; }
+[0-9]+"."[0-9]+([Ee][-+]?[0-9]+)?	|
+"."[0-9]+([Ee][-+]?[0-9]+)?	{ yylval.floatval = atof(yytext) ;return APPROXNUM; }
 
 
-   /* strings */
-'(\\.|''|[^'\n])*'	|
-\"(\\.|\"\"|[^"\n])*\"  { printf("STRING "); }
-
-'(\\.|[^'\n])*$	        { printf("Unterminated string %s ", yytext); }
-\"(\\.|[^"\n])*$	{ printf("Unterminated string %s ", yytext); }
 
 
-   /* operators */
-[-+*/%\^(){}.:;,\[\]]   { printf("%c", yytext[0]); }
+ /* string*/
+'(\\.|''|[^'\n])*'  |
+\"(\\.|\"\"|[^"\n])*\"  { yylval.strval = strdup(yytext); return STRING; }
 
 
-"="	    { printf(" = "); }
-">="	{ printf(" >= "); }
-">"	    { printf(" > "); }
-"<="	{ printf(" <= "); }
-"<"	    { printf(" < "); }
-"<>"	{ printf(" <> "); }
+"="     { yylval.subtok = 4; return COMPARISON; }
+">="    { yylval.subtok = 6; return COMPARISON; }
+">"     { yylval.subtok = 2; return COMPARISON; }
+"<="    { yylval.subtok = 5; return COMPARISON; }
+"<"     { yylval.subtok = 1; return COMPARISON; }
+"<>"    { yylval.subtok = 3; return COMPARISON; }
 
+[-+*/%(){}.:;,\[\]<>]  { return  yytext[0]; }
 
-	/* comments */   
+".."    { yylval.strval = strdup(yytext); return PPOINT; }
+
+    /* comments */
 #.*		;
 "//"[ \t].*	;
 
-	/* everything else */
-[ \t\n]	;	
-.               { printf("mystery character "); }
-
+    /* everything else */
+[ \t]   ;
+\n              { return EOL; }
+.               { yyerror("mystery character '%c'", *yytext); }
 
 %%
-
-main()
-{
-  yylex();
-}
-

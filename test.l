@@ -54,7 +54,6 @@ FALSE   { yylval.intval = 0; return BOOL; }
 
 
 
-
  /* string*/
 '(\\.|''|[^'\n])*'  |
 \"(\\.|\"\"|[^"\n])*\"  { yylval.strval = strdup(yytext); return STRING; }
@@ -67,17 +66,26 @@ FALSE   { yylval.intval = 0; return BOOL; }
 "<"     { yylval.subtok = 1; return COMPARISON; }
 "<>"    { yylval.subtok = 3; return COMPARISON; }
 
+"->"    {yylval.strval = strdup(yytext); return RIGHTARROW;}
+"<-"    {yylval.strval = strdup(yytext); return LEFTARROW;}
+
+
 [-+*/%(){}.:;,\[\]<>]  { return  yytext[0]; }
 
 ".."    { yylval.strval = strdup(yytext); return PPOINT; }
 
+[ \t\r\f]   ;
+\n              { return EOL; }
+
     /* comments */
-#.*		;
-"//"[ \t].*	;
+#.*		        ;
+"//".*	        ;
+"/*"            {oldstate = YY_START; BEGIN COMMENT;}
+<COMMENT>"*/"   {BEGIN oldstate;}
+<COMMENT>.|\n   ;
+<COMMENT><<EOF>>    {yyerror("unclosed comment");}
 
     /* everything else */
-[ \t]   ;
-\n              { return EOL; }
 .               { yyerror("mystery character '%c'", *yytext); }
 
 %%

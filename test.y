@@ -16,6 +16,9 @@ void emit(char *s, ...);
     int subtok;
 	
 	struct ast *a;
+
+
+	const char* keyword;
 }
 
 %token <intval> INTNUM
@@ -24,6 +27,9 @@ void emit(char *s, ...);
 %token <strval> NAME
 %token <strval> STRING
 %token <strval> PPOINT
+%token <strval> RIGHTARROW
+%token <strval> LEFTARROW
+
 
 %left OR
 %left XOR
@@ -32,64 +38,177 @@ void emit(char *s, ...);
 %left <subtok> COMPARISON
 %left '+' '-'
 %left '*' '/' '%'
+%left '[' ']'
+%left '(' ')'
+%left '.'
 
-
-%token MATCH
-%token EOL
-%token RETURN
-%token DESC
-%token ASC
-%token DISTINCT
-%token ORDER
-%token BY
-%token LIMIT
-%token AS
-%token IS
-%token ALL
-%token MERGE
-%token ON
-%token WHERE
-%token WITH
-%token UNIONS
-%token AND
-%token ENDS
-%token IN
-%token NOT
-%token OR
-%token XOR
-%token NULLX
-%token COUNT
-%token EXISTS
-%token ANY
-%token CONTAINS
+%token <keyword> 
+	ALL AND ANY AS ASC 
+	BY 
+	CONTAINS COUNT 
+	DESC DISTINCT 
+	ENDS EOL EXISTS 
+	IN IS 
+	LIMIT 
+	MATCH MERGE 
+	NOT NULLX 
+	ON OR ORDER 
+	RETURN 
+	UNIONS 
+	WHERE WITH 
+	XOR 
 
 
 
 // %type <a> exp factor term
-%type <strval> col_name opt_as_alias limit_clause asc_desc_opt order_by_clause distinct_opt
-%type <strval> return_expr return_expr_list func_opt  
-
-%type <strval> where_clause where_expression ComparisonExpression
-%type <strval> Expression PartialComparisonExpression Literal FilterExpression INExpression
-%type <strval> NumberLiteral StringList IntList ApproxnumList
-%type <strval> Cypher
+%type <strval> AnonymousPatternPart ApproxnumList ApproxnumParam AscDescOpt
+%type <strval> ColName ComparisonExpression Cypher CypherClause
+%type <strval> DistinctOpt
+%type <strval> Expression
+%type <strval> FilterExpression FuncOpt
+%type <strval> INExpression IntList IntParam IntegerLiteralColonPatternPart IntegerLiteralPattern IntegerLiteralPatternPart
+%type <strval> LimitClause Literal
+%type <strval> MapLiteral MapLiteralClause MapLiteralPattern MapLiteralPatternPart MatchClause
+%type <strval> NodeLabel NodeLabels NodeLabelsPattern NodePattern NumberLiteral
+%type <strval> OptAsAlias OrderByClause
+%type <strval> PartialComparisonExpression Pattern PatternElement PatternElementChain PatternElementChainClause PatternPart PropertiesPattern PropertyKey 
+%type <strval> RelTypeName RelTypeNamePattern RelationshipDetail RelationshipPattern RelationshipTypePattern ReturnExpr ReturnExprList
+%type <strval> StringList StringParam
+%type <strval> Variable_Pattern
+%type <strval> WhereClause WhereExpression
 
 %start Cypher
 
 %%
-
-Cypher:where_clause return_clause {emit("Cypher");}
+Cypher:					/* nil */	{}
+| Cypher EOL			{printf(">");}
+| Cypher CypherClause EOL		{printf(">");}
 ;
 
-where_clause:   {emit("where_clause");}
-| WHERE where_expression {emit("WHERE where_expression");}
+CypherClause: MatchClause WhereClause ReturnClause     {emit("Cypher");}
+/* Match Clause */
+
+MatchClause: MATCH Pattern        {emit("MatchClause");}
 ;
 
-where_expression:ComparisonExpression      {emit("where_expression");}
-| where_expression OR where_expression    {emit("OR");}
-| where_expression XOR where_expression   {emit("XOR");}
-| where_expression AND where_expression   {emit("AND");}
-| NOT where_expression          {emit("NOT");}
+Pattern:PatternPart                            {emit("Pattern");}
+| Pattern ',' PatternPart                      {emit("Patterns:  ,  ");}
+;
+
+PatternPart:AnonymousPatternPart               {emit("Pattern_part");}
+| ColName COMPARISON AnonymousPatternPart      {emit("pattern_part  %d ",$2);}
+;
+
+AnonymousPatternPart:PatternElement             {emit("AnonymousPatternPart");}
+;
+
+PatternElement:'(' PatternElement ')'           {emit("( PatternElement )");}
+| NAME '(' PatternElement ')'                   {emit("Function Name ( )");}
+| NodePattern PatternElementChainClause        {emit("NodePattern : ");}
+;
+
+PatternElementChainClause:                     {emit("");}
+| PatternElementChains                           {emit("PatternElementChain");}
+;
+
+PatternElementChains:PatternElementChain        {emit("PatternElementChain");}
+| PatternElementChains PatternElementChain      {emit("PatternElementChain PatternElementChain ...");}
+;
+
+PatternElementChain:RelationshipPattern NodePattern     {emit("PatternElementChain");}
+;
+
+NodePattern:'(' Variable_Pattern NodeLabelsPattern PropertiesPattern ')'  {emit("NodePattern");}
+;
+
+Variable_Pattern:               {emit("Variable is NULL");}
+| ColName                      {emit("Variable:ColName");}
+;
+
+NodeLabelsPattern:             {emit("NodeLabelsPattern");}
+| NodeLabel NodeLabels          {emit("NodeLabel : ");}
+;
+
+NodeLabels:                     {emit("NodeLabels");}
+| NodeLabel                     {emit("NodeLabel");}
+;
+
+NodeLabel: ':' ColName         {emit("NodeLabel : ColName");}
+;
+
+PropertiesPattern:             {emit("PropertiesPattern is NULL");}
+| MapLiteral                    {emit("MapLiteral");}
+;
+
+MapLiteral:'{' MapLiteralClause '}'                        {emit("{MapLiteralClause}");}
+;
+
+MapLiteralClause:                                          {emit("MapLiteralClause");}
+| MapLiteralPattern                                        {emit("MapLiteralPattern");}
+;
+
+MapLiteralPattern:MapLiteralPatternPart                  {emit("MapLiteralPatternPart");}
+| MapLiteralPattern ',' MapLiteralPatternPart            {emit("MapLiteralPatternPart , MapLiteralPatternPart");}
+;
+
+MapLiteralPatternPart:PropertyKey ':' WhereExpression         {emit("PropertyKey : Expression");}
+;
+
+PropertyKey:ColName           {emit("PropertyKey:ColName");}
+;
+
+RelationshipPattern:LEFTARROW RelationshipDetail RIGHTARROW  {emit("<-   ->");}
+| LEFTARROW RelationshipDetail '-'                        {emit("<-   -");}
+| '-' RelationshipDetail RIGHTARROW                        {emit("-    ->");}
+| '-' RelationshipDetail '-'                            {emit("-    -");}
+| '-' RIGHTARROW                                        {emit("-->");}
+| LEFTARROW '-'                                         {emit("<--");}
+| '-''-'                                                {emit("--");}
+;
+
+RelationshipDetail: Variable_Pattern RelationshipTypePattern IntegerLiteralPattern PropertiesPattern      {emit("RelationshipDetail");}
+'[' Variable_Pattern RelationshipTypePattern IntegerLiteralPattern PropertiesPattern ']'    {emit("[RelationshipDetail]");}
+;
+
+RelationshipTypePattern:               {emit("RelationshipTypePattern is NULL");}
+| ':' RelTypeName RelTypeNamePattern   {emit(": RelTypeName RelTypeNamePattern");}
+;
+
+RelTypeNamePattern:        {}
+| '|' RelTypeName           {emit("| RelTypeName");}
+| '|' ':' RelTypeName       {emit("| : RelTypeName");}
+;
+
+RelTypeName:ColName        {emit("RelTypeName:ColName");}
+;
+
+IntegerLiteralPattern:                                              {emit("IntegerLiteralPattern is NULL");}
+| '*' IntegerLiteralPatternPart IntegerLiteralColonPatternPart   {emit("* IntegerLiteralPatternPart");}
+;
+
+IntegerLiteralColonPatternPart:           {}
+| PPOINT IntegerLiteralPatternPart        {emit(".. IntegerLiteralPatternPart");}
+;
+
+IntegerLiteralPatternPart:                {}
+| IntegerLiteral                            {emit("IntegerLiteral");}
+;
+
+IntegerLiteral:INTNUM                       {emit("INTNUM %d",$1);}
+;
+
+
+/* Where Clause */
+
+WhereClause:   {emit("WhereClause");}
+| WHERE WhereExpression {emit("WHERE WhereExpression");}
+;
+
+WhereExpression:ComparisonExpression      {emit("WhereExpression");}
+| WhereExpression OR WhereExpression    {emit("OR");}
+| WhereExpression XOR WhereExpression   {emit("XOR");}
+| WhereExpression AND WhereExpression   {emit("AND");}
+| NOT WhereExpression          {emit("NOT");}
 ;
 
 ComparisonExpression:Expression PartialComparisonExpression    {emit("ComparisonExpression");}
@@ -102,20 +221,20 @@ PartialComparisonExpression:            {emit("PartialComparisonExpression");}
 
 Expression:Literal                  {emit("Expression:Literal");}
 | ANY '(' FilterExpression ')'      {emit("ANY");}
-| func_opt                          {emit("func");}
-| '(' where_expression ')'          {emit(" ( ) ");}
+| FuncOpt                          {emit("func");}
+| '(' WhereExpression ')'          {emit(" ( ) ");}
 | INExpression                      {emit("INExpression");}
 ;
 
-FilterExpression:Literal IN where_expression where_clause  {emit("FilterExpression:IN");}
+FilterExpression:Literal IN WhereExpression WhereClause  {emit("FilterExpression:IN");}
 ;
 
-Literal:IntList                 {emit("Literal");}
-| StringList                    {emit("StringList");}
+Literal:IntParam                 {emit("Literal");}
+| StringParam                    {emit("StringList");}
 | BOOL                          {emit("BOOL:%d",$1);}
 | NULLX                         {emit("NULL");}
-| ApproxnumList                 {emit("ApproxnumList");}
-| col_name                      {emit("col_name");}
+| ApproxnumParam                 {emit("ApproxnumList");}
+| ColName                      {emit("ColName");}
 ;
 
 NumberLiteral:INTNUM        {emit("%d",$1);}
@@ -128,68 +247,76 @@ INExpression:                   {emit("no INExpression");}
 | '[' ApproxnumList ']'         {emit("ApproxnumList");}
 ;
 
-
-StringList:STRING               {emit("%s",$1);free($1);}
-| StringList ',' STRING         {emit("StringList,%s",$3);free($3);}
+StringParam:STRING              {emit("%s",$1);free($1);}
 ;
 
-IntList:INTNUM                  {emit("%d",$1);}
-| IntList ',' INTNUM            {emit("IntList,%d",$3);}
+IntParam:INTNUM                 {emit("%d",$1);}
 ;
 
-ApproxnumList:APPROXNUM         {emit("%f",$1);}
-| ApproxnumList ',' APPROXNUM   {emit("ApproxnumList,%f",$3);}
+ApproxnumParam:APPROXNUM        {emit("%f",$1);}
+;
+
+StringList:StringParam               {emit("StringParam");}
+| StringList ',' StringParam         {emit("StringList , ");}
+;
+
+IntList:IntParam                  {emit("IntParam");}
+| IntList ',' IntParam            {emit("IntList ,");}
+;
+
+ApproxnumList:ApproxnumParam         {emit("ApproxnumParam");}
+| ApproxnumList ',' ApproxnumParam   {emit("ApproxnumList ,");}
 ;
 
 
 
+/* Return Clause */
 
+ReturnClause: RETURN DistinctOpt ReturnExprList OrderByClause LimitClause {emit("RETURN ");}
 
-return_clause: RETURN distinct_opt return_expr_list order_by_clause limit_clause EOL {emit("RETURN ");}
-
-return_expr_list:return_expr /* [name] OR [a,b,c] */    {emit("return_expr");}
-| return_expr_list ',' return_expr   {emit(" , ");}
+ReturnExprList:ReturnExpr /* [name] OR [a,b,c] */    {emit("ReturnExpr");}
+| ReturnExprList ',' ReturnExpr   {emit(" , ");}
 ;
 
-return_expr:col_name opt_as_alias {emit("return_expr:col");}
-| func_opt opt_as_alias             {emit("return_expr:func");}
-| NumberLiteral opt_as_alias          {emit("return_expr:digital");}
+ReturnExpr:ColName OptAsAlias {emit("ReturnExpr:col");}
+| FuncOpt OptAsAlias             {emit("ReturnExpr:func");}
+| NumberLiteral OptAsAlias          {emit("ReturnExpr:digital");}
 ; /* [ ... as b] OR  [...]*/
 
-opt_as_alias: /* no AS Alias*/ {}
+OptAsAlias: /* no AS Alias*/ {}
 | AS NAME       {emit("AS %s",$2); free($2);}
 ;
 
-count_func_opt:COUNT '(' distinct_opt col_name ')'    /* count(a.id) */      {emit("COUNT");} 
+CountFuncOpt:COUNT '(' DistinctOpt ColName ')'    /* count(a.id) */      {emit("COUNT");} 
 ;
 
-func_opt:NAME '(' col_name ')'         /* min(a.id) or func(a.id) */         {emit("%s(",$1);emit(")");}
-| exists_opt                        {emit("exists_opt");}
-| count_func_opt                    {emit("count_func_opt");}
+FuncOpt:NAME '(' ColName ')'         /* min(a.id) or func(a.id) */         {emit("%s(",$1);emit(")");}
+| ExistsOpt                        {emit("ExistsOpt");}
+| CountFuncOpt                    {emit("CountFuncOpt");}
 ;
 
-exists_opt:EXISTS '(' col_name ')'   /* exists(a.id) */   {emit("EXISTS");}
+ExistsOpt:EXISTS '(' ColName ')'   /* exists(a.id) */   {emit("EXISTS");}
 ;
 
 
-order_by_clause: /* no orderby*/ {}
-| ORDER BY col_name asc_desc_opt    {emit("ORDER BY ");}
+OrderByClause: /* no orderby*/ {}
+| ORDER BY ColName AscDescOpt    {emit("ORDER BY ");}
 ;
 
-distinct_opt:   {emit("no DISTINCT");}       
+DistinctOpt:   {emit("no DISTINCT");}       
 | DISTINCT      {emit("DISTINCT");}
 ;
 
-asc_desc_opt:/* no ASC DESC */ {}
+AscDescOpt:/* no ASC DESC */ {}
 | ASC       {emit("ASC ");}
 | DESC      {emit("DESC ");}
 ;
 
-limit_clause:/* no limit */ {}
+LimitClause:/* no limit */ {}
 | LIMIT INTNUM  {emit("LIMIT %d\n",$2); }
 ;
 
-col_name:NAME {emit("%s ",$1);free($1);}
+ColName:NAME {emit("%s ",$1);free($1);}
 | NAME '.' NAME  {emit("%s.%s ",$1,$3); free($1); free($3);}
 ;
 

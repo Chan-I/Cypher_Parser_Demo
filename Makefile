@@ -1,20 +1,21 @@
-# $Header: /home/johnl/flnb/code/RCS/Makefile.ch1,v 2.2 2009/11/08 02:52:21 johnl Exp $
-# Companion source code for "flex & bison", published by O'Reilly
-# Media, ISBN 978-0-596-15597-1
-# Copyright (c) 2009, Taughannock Networks. All rights reserved.
-# See the README file for license conditions and contact info.
+.PHONY: clean mem
 
-# programs in chapter 1
+CC := cc
+CFLAGS := -g -O0
 
-all:	test
+run: parser.tab.o scanner.o ast.o module.o main.o
+	$(CC) -g -o $@ $+
 
-test:	test.l test.y test.h testfuncs.c
-	bison -d test.y
-	flex -o test.lex.c test.l
-	cc -g -O0 -o $@ test.tab.c test.lex.c testfuncs.c
+mem:
+	valgrind --leak-check=full ./run
 
 clean:
-	rm -f test \
-	lex.yy.c *.lex.c *.lex.h *.tab.h *.tab.c \
-	*.output
+	rm -f run *.o parser.tab* scanner.[ch]
 
+parser.tab.o: scanner.c
+
+scanner.c: scanner.l
+	flex -d --header-file=scanner.h --outfile=scanner.c scanner.l
+
+parser.tab.c: parser.y
+	bison -d parser.y

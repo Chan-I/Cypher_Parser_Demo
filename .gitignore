@@ -1,8 +1,12 @@
-test
+run
 *.o
+*.out
+*.output
 *.lex.c
 *.lex.h
 *.tab.c
 *.tab.h
 *.yy.c
 *.yy.h
+scanner.c
+scanner.h

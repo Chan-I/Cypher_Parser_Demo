@@ -1,13 +1,15 @@
-%option noyywrap yylineno case-insensitive nodefault
-
 %{
-#include "test.tab.h"
-#include <stdarg.h>
-#include <string.h>
-
-void yyerror(const char *s, ...);
+#include "parser.tab.h"
 int oldstate;
 %}
+
+%option reentrant
+%option yylineno
+
+%option noyywrap
+
+%option case-insensitive
+%option bison-bridge
 
 %x COMMENT
 %s BTWMODE
@@ -41,38 +43,38 @@ NULL        { return NULLX;      }
 COUNT       { return COUNT;      }
 EXISTS      { return EXISTS;     }
 CONTAINS    { return CONTAINS;   }
-TRUE    { yylval.intval = 1; return BOOL; }
-FALSE   { yylval.intval = 0; return BOOL; }
+TRUE    { yylval->intval = 1; return BOOL; }
+FALSE   { yylval->intval = 0; return BOOL; }
 
 
-[A-Za-z][A-Za-z0-9_]*	{ yylval.strval = strdup(yytext); return NAME; }
+[A-Za-z][A-Za-z0-9_]*	{ yylval->strval = strdup(yytext); return NAME; }
 
    /* numbers */ 
-[0-9]*	{yylval.intval = atoi(yytext); return INTNUM; }
+[0-9]*	{yylval->intval = atoi(yytext); return INTNUM; }
 [0-9]+"."[0-9]+([Ee][-+]?[0-9]+)?	|
-"."[0-9]+([Ee][-+]?[0-9]+)?	{ yylval.floatval = atof(yytext) ;return APPROXNUM; }
+"."[0-9]+([Ee][-+]?[0-9]+)?	{ yylval->floatval = atof(yytext) ;return APPROXNUM; }
 
 
 
  /* string*/
 '(\\.|''|[^'\n])*'  |
-\"(\\.|\"\"|[^"\n])*\"  { yylval.strval = strdup(yytext); return STRING; }
+\"(\\.|\"\"|[^"\n])*\"  { yylval->strval = strdup(yytext); return STRING; }
 
 
-"="     { yylval.subtok = 4; return COMPARISON; }
-">="    { yylval.subtok = 6; return COMPARISON; }
-">"     { yylval.subtok = 2; return COMPARISON; }
-"<="    { yylval.subtok = 5; return COMPARISON; }
-"<"     { yylval.subtok = 1; return COMPARISON; }
-"<>"    { yylval.subtok = 3; return COMPARISON; }
+"="     { yylval->subtok = 4; return COMPARISON; }
+">="    { yylval->subtok = 6; return COMPARISON; }
+">"     { yylval->subtok = 2; return COMPARISON; }
+"<="    { yylval->subtok = 5; return COMPARISON; }
+"<"     { yylval->subtok = 1; return COMPARISON; }
+"<>"    { yylval->subtok = 3; return COMPARISON; }
 
-"->"    {yylval.strval = strdup(yytext); return RIGHTARROW;}
-"<-"    {yylval.strval = strdup(yytext); return LEFTARROW;}
+"->"    {yylval->strval = strdup(yytext); return RIGHTARROW;}
+"<-"    {yylval->strval = strdup(yytext); return LEFTARROW;}
 
 
 [-+*/%(){}.:;,\[\]<>]  { return  yytext[0]; }
 
-".."    { yylval.strval = strdup(yytext); return PPOINT; }
+".."    { yylval->strval = strdup(yytext); return PPOINT; }
 
 [ \t\r\f]   ;
 \n              { return EOL; }
@@ -83,9 +85,4 @@ FALSE   { yylval.intval = 0; return BOOL; }
 "/*"            {oldstate = YY_START; BEGIN COMMENT;}
 <COMMENT>"*/"   {BEGIN oldstate;}
 <COMMENT>.|\n   ;
-<COMMENT><<EOF>>    {yyerror("unclosed comment");}
 
-    /* everything else */
-.               { yyerror("mystery character '%c'", *yytext); }
-
-%%

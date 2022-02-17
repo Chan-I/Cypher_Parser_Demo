@@ -4,77 +4,134 @@
 
 #include "ast.h"
 
-
-
-
-List *
-lcons(void *datum, List *list)
+ast_node_list *
+new_list_node()
 {
-	assert(IsPointerList(list));
-
-	if (list == NIL)
-		list = new_list(T_List);
-	else
-		new_head_cell(list);
-
-	lfirst(list->head) = datum;
-	return list;
+	ast_node_list *node = (ast_node_list *) malloc(sizeof(ast_node_list));
+	node->length = 0;
+	node->capacity = 16;
+	node->list = (ast_node_sexp **) malloc(16*sizeof(ast_node_sexp *));
+	return node;
 }
 
-static List *
-new_list(NodeTag type)
+void
+delete_list_node(ast_node_list *node)
 {
-	List	   *new_list;
-	ListCell   *new_head;
-
-	new_head = (ListCell *) malloc(sizeof(*new_head));
-	new_head->next = NULL;
-	/* new_head->data is left undefined! */
-
-	new_list = (List *) malloc(sizeof(*new_list));
-	new_list->type = type;
-	new_list->length = 1;
-	new_list->head = new_head;
-	new_list->tail = new_head;
-
-	return new_list;
+	int i;
+	for (i = 0; i < node->length; i++) {
+		delete_sexp_node(node->list[i]);
+	}
+	free(node->list);
+	free(node);
 }
 
-static void
-new_head_cell(List *list)
+void
+add_node_to_list(ast_node_list *list, ast_node_sexp *node)
 {
-	ListCell   *new_head;
-
-	new_head = (ListCell *) malloc(sizeof(*new_head));
-	new_head->next = list->head;
-
-	list->head = new_head;
+	if (list->length == list->capacity) {
+		// TODO should allocate some more space
+	}
+	list->list[list->length] = node;
 	list->length++;
 }
 
-static void
-new_tail_cell(List *list)
+void
+print_node_list(ast_node_list *node)
 {
-	ListCell   *new_tail;
-
-	new_tail = (ListCell *) malloc(sizeof(*new_tail));
-	new_tail->next = NULL;
-
-	list->tail->next = new_tail;
-	list->tail = new_tail;
-	list->length++;
+	int i = 0;
+	printf("list node with %d elements\n", node->length);
+	for (i = 0; i < node->length; i++) {
+		print_node_sexp(node->list[i]);
+	}
 }
 
-List *
-lappend(List *list, void *datum)
+ast_node_atom *
+new_atom_node(enum atom_types type, void *v)
 {
-	assert(IsPointerList(list));
+	ast_node_atom *node = (ast_node_atom *) malloc(sizeof(ast_node_atom));
+	node->type = type;
+	switch (type) {
+		case AT_IDENTIFIER:
+		case AT_STRING:
+			node->value.string = (char *) malloc(strlen((char *) v)+1);
+			strcpy(node->value.string, (char *) v);
+			break;
+		case AT_NUMBER:
+			node->value.number = *((long *) v);
+			break;
+	}
+	return node;
+}
 
-	if (list == NIL)
-		list = new_list(T_List);
-	else
-		new_tail_cell(list);
+void
+delete_atom_node(ast_node_atom *node)
+{
+	switch (node->type) {
+		case AT_IDENTIFIER:
+		case AT_STRING:
+			free(node->value.string);
+			break;
+		case AT_NUMBER:
+			break;
+	}
+	free(node);
+}
 
-	lfirst(list->tail) = datum;
-	return list;
+void
+print_node_atom(ast_node_atom *node)
+{
+	if (node->type == AT_IDENTIFIER) {
+		printf("identifier node: %s\n", node->value.string);
+	} else if (node->type == AT_STRING) {
+		printf("string node: %s\n", node->value.string);
+	} else if (node->type == AT_NUMBER) {
+		printf("number node: %ld\n", node->value.number);
+	} else {
+		printf("unknown atom node");
+	}
+}
+
+ast_node_sexp *
+new_sexp_node(enum sexp_types type, void *v)
+{
+	ast_node_sexp *node = (ast_node_sexp *) malloc(sizeof(ast_node_sexp));
+
+	node->type = type;
+	switch (type) {
+		case ST_ATOM:
+			node->value.atom = (ast_node_atom *) v;
+			break;
+		case ST_LIST:
+			node->value.list = (ast_node_list *) v;
+			break;
+	}
+	return node;
+}
+
+void
+delete_sexp_node(ast_node_sexp *node)
+{
+	switch (node->type) {
+		case ST_ATOM:
+			delete_atom_node(node->value.atom);
+			break;
+		case ST_LIST:
+			delete_list_node(node->value.list);
+			break;
+	}
+	free(node);
+}
+
+void
+print_node_sexp(ast_node_sexp *node)
+{
+	if (node->type == ST_ATOM) {
+		printf("node is an atom: ");
+		print_node_atom(node->value.atom);
+	} else if (node->type == ST_LIST) {
+		printf("node is a list\n");
+		print_node_list(node->value.list);
+	} else {
+		printf("node is a what?\n");
+	}
 }

@@ -30,7 +30,7 @@ void
 delete_module(module *mod)
 {
 	if (mod->rt != NULL) {
-	//	delete_sexp_node(mod->rt);
+		delete_sexp_node(mod->rt);
 	}
 	fclose(mod->src);
 	free(mod);

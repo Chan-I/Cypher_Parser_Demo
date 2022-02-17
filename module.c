@@ -2,6 +2,17 @@
 #include "parser.tab.h"
 #include "scanner.h"
 
+void
+emit(char *s, ...)
+{
+  va_list ap;
+  va_start(ap, s);
+
+  printf("rpn: ");
+  vfprintf(stdout, s, ap);
+  printf("\n");
+}
+
 module *
 new_module_from_stdin()
 {
@@ -26,31 +37,19 @@ new_module_from_string(char *src)
 	return mod;
 }
 
-void
-delete_module(module *mod)
-{
-	if (mod->rt != NULL) {
-		delete_sexp_node(mod->rt);
-	}
-	fclose(mod->src);
-	free(mod);
-}
-
 int
 parse_module(module *mod)
 {
 	yyscan_t sc;
 	int res;
-	extern int yydebug ;
+	
 	yylex_init(&sc);
 	yyset_in(mod->src, sc);
-	//yydebug = 1;
-	res = yyparse(sc, mod);
-	//yylex_destroy(sc);
 
-	if (res == 0) {
-	//	print_node_sexp(mod->root);
-	}
+#ifdef YYDEBUG
+	yydebug = 0;
+#endif
+	res = yyparse(sc, mod);
 
 	return res;
 }
@@ -124,3 +123,34 @@ ReturnStmtPrint(ReturnStmtClause *rt, char *in)
     sprintf(str,"LIMIT %ld",rt->limitNum);
 }
 
+void
+delete_return_clause_node(ReturnStmtClause *rt)
+{
+  if (rt -> odb)
+    free(rt -> odb);
+  if(rt->returnCols != NIL)
+    list_free(rt->returnCols);
+}
+
+void
+delete_module(module *mod)
+{
+	if (mod->rt != NULL) {
+		delete_return_clause_node(mod->rt);
+	}
+  /* TODO delete where clause node */
+  /* TODO delete match clause node */
+
+	fclose(mod->src);
+	free(mod);
+}
+
+char *
+print_module(module *mod)
+{
+  char *sql = malloc(8192);  // TODO : 8192 ???? 
+  ReturnStmtPrint(mod->rt, sql);
+  /* TO DO */
+
+  return sql;
+}

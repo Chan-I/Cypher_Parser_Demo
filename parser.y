@@ -1,6 +1,6 @@
 %define api.pure full
 %lex-param {void *scanner}
-%parse-param {void *scanner}{module *mod}
+%parse-param {void *scanner}{module *mod} //  传入参数
 
 %define parse.trace
 %define parse.error verbose
@@ -31,8 +31,6 @@ char attrNum[MAX_COLNAME_LENGTH];
     double floatval;
     char *strval;
     int subtok;
-
-	struct ast *a;
 
 	Node	*node;
 	List 	*list;
@@ -94,6 +92,192 @@ char attrNum[MAX_COLNAME_LENGTH];
 
 %%
 %start sexps;
+
+Cypher:					/* nil */	{}
+| Cypher EOL			{printf(">");}
+| Cypher CypherClause EOL		{printf(">");}
+;
+
+CypherClause: MatchClause WhereClause ReturnClause     {emit("Cypher");}
+/* Match Clause */
+
+MatchClause: MATCH Pattern        {emit("MatchClause");}
+;
+
+Pattern:PatternPart                            {emit("Pattern");}
+| Pattern ',' PatternPart                      {emit("Patterns:  ,  ");}
+;
+
+PatternPart:AnonymousPatternPart               {emit("Pattern_part");}
+| ColName COMPARISON AnonymousPatternPart      {emit("pattern_part  %d ",$2);}
+;
+
+AnonymousPatternPart:PatternElement             {emit("AnonymousPatternPart");}
+;
+
+PatternElement:'(' PatternElement ')'           {emit("( PatternElement )");}
+| NAME '(' PatternElement ')'                   {emit("Function Name ( )");}
+| NodePattern PatternElementChainClause        {emit("NodePattern : ");}
+;
+
+PatternElementChainClause:                     {emit("");}
+| PatternElementChains                           {emit("PatternElementChain");}
+;
+
+PatternElementChains:PatternElementChain        {emit("PatternElementChain");}
+| PatternElementChains PatternElementChain      {emit("PatternElementChain PatternElementChain ...");}
+;
+
+PatternElementChain:RelationshipPattern NodePattern     {emit("PatternElementChain");}
+;
+
+NodePattern:'(' Variable_Pattern NodeLabelsPattern PropertiesPattern ')'  {emit("NodePattern");}
+;
+
+Variable_Pattern:               {emit("Variable is NULL");}
+| ColName                      {emit("Variable:ColName");}
+;
+
+NodeLabelsPattern:             {emit("NodeLabelsPattern");}
+| NodeLabel NodeLabels          {emit("NodeLabel : ");}
+;
+
+NodeLabels:                     {emit("NodeLabels");}
+| NodeLabel                     {emit("NodeLabel");}
+;
+
+NodeLabel: ':' ColName         {emit("NodeLabel : ColName");}
+;
+
+PropertiesPattern:             {emit("PropertiesPattern is NULL");}
+| MapLiteral                    {emit("MapLiteral");}
+;
+
+MapLiteral:'{' MapLiteralClause '}'                        {emit("{MapLiteralClause}");}
+;
+
+MapLiteralClause:                                          {emit("MapLiteralClause");}
+| MapLiteralPattern                                        {emit("MapLiteralPattern");}
+;
+
+MapLiteralPattern:MapLiteralPatternPart                  {emit("MapLiteralPatternPart");}
+| MapLiteralPattern ',' MapLiteralPatternPart            {emit("MapLiteralPatternPart , MapLiteralPatternPart");}
+;
+
+MapLiteralPatternPart:PropertyKey ':' WhereExpression         {emit("PropertyKey : Expression");}
+;
+
+PropertyKey:ColName           {emit("PropertyKey:ColName");}
+;
+
+RelationshipPattern:LEFTARROW RelationshipDetail RIGHTARROW  {emit("<-   ->");}
+| LEFTARROW RelationshipDetail '-'                        {emit("<-   -");}
+| '-' RelationshipDetail RIGHTARROW                        {emit("-    ->");}
+| '-' RelationshipDetail '-'                            {emit("-    -");}
+| '-' RIGHTARROW                                        {emit("-->");}
+| LEFTARROW '-'                                         {emit("<--");}
+| '-''-'                                                {emit("--");}
+;
+
+RelationshipDetail: Variable_Pattern RelationshipTypePattern IntegerLiteralPattern PropertiesPattern      {emit("RelationshipDetail");}
+'[' Variable_Pattern RelationshipTypePattern IntegerLiteralPattern PropertiesPattern ']'    {emit("[RelationshipDetail]");}
+;
+
+RelationshipTypePattern:               {emit("RelationshipTypePattern is NULL");}
+| ':' RelTypeName RelTypeNamePattern   {emit(": RelTypeName RelTypeNamePattern");}
+;
+
+RelTypeNamePattern:        {}
+| '|' RelTypeName           {emit("| RelTypeName");}
+| '|' ':' RelTypeName       {emit("| : RelTypeName");}
+;
+
+RelTypeName:ColName        {emit("RelTypeName:ColName");}
+;
+
+IntegerLiteralPattern:                                              {emit("IntegerLiteralPattern is NULL");}
+| '*' IntegerLiteralPatternPart IntegerLiteralColonPatternPart   {emit("* IntegerLiteralPatternPart");}
+;
+
+IntegerLiteralColonPatternPart:           {}
+| PPOINT IntegerLiteralPatternPart        {emit(".. IntegerLiteralPatternPart");}
+;
+
+IntegerLiteralPatternPart:                {}
+| IntegerLiteral                            {emit("IntegerLiteral");}
+;
+
+IntegerLiteral:INTNUM                       {emit("INTNUM %d",$1);}
+;
+
+
+/* Where Clause */
+
+WhereClause:   {emit("WhereClause");}
+| WHERE WhereExpression {emit("WHERE WhereExpression");}
+;
+
+WhereExpression:ComparisonExpression      {emit("WhereExpression");}
+| WhereExpression OR WhereExpression    {emit("OR");}
+| WhereExpression XOR WhereExpression   {emit("XOR");}
+| WhereExpression AND WhereExpression   {emit("AND");}
+| NOT WhereExpression          {emit("NOT");}
+;
+
+ComparisonExpression:Expression PartialComparisonExpression    {emit("ComparisonExpression");}
+;
+
+PartialComparisonExpression:            {emit("PartialComparisonExpression");}
+| COMPARISON Expression    /* >= */    {emit("%d",$1);}
+| IN Expression                         {emit("IN");}
+;
+
+Expression:Literal                  {emit("Expression:Literal");}
+| ANY '(' FilterExpression ')'      {emit("ANY");}
+| FuncOpt                          {emit("func");}
+| '(' WhereExpression ')'          {emit(" ( ) ");}
+| INExpression                      {emit("INExpression");}
+;
+
+FilterExpression:Literal IN WhereExpression WhereClause  {emit("FilterExpression:IN");}
+;
+
+Literal:IntParam                 {emit("Literal");}
+| StringParam                    {emit("StringList");}
+| BOOL                          {emit("BOOL:%d",$1);}
+| NULLX                         {emit("NULL");}
+| ApproxnumParam                 {emit("ApproxnumList");}
+| ColName                      {emit("ColName");}
+;
+
+INExpression:                   {emit("no INExpression");}
+| '[' StringList ']'            {emit("StringList");}
+| '[' IntList ']'               {emit("IntList");}
+| '[' ApproxnumList ']'         {emit("ApproxnumList");}
+;
+
+StringParam:STRING              {emit("%s",$1);free($1);}
+;
+
+IntParam:INTNUM                 {emit("%d",$1);}
+;
+
+ApproxnumParam:APPROXNUM        {emit("%f",$1);}
+;
+
+StringList:StringParam               {emit("StringParam");}
+| StringList ',' StringParam         {emit("StringList , ");}
+;
+
+IntList:IntParam                  {emit("IntParam");}
+| IntList ',' IntParam            {emit("IntList ,");}
+;
+
+ApproxnumList:ApproxnumParam         {emit("ApproxnumParam");}
+| ApproxnumList ',' ApproxnumParam   {emit("ApproxnumList ,");}
+;
+
+
 sexps:
 	ReturnClause	{mod->rt = $1;}
 
@@ -217,10 +401,7 @@ OrderByClause: /* no orderby*/ {$$ = NULL;}
 					{
 						$$ = makeNode(OrderByStmtClause);
 						$$->ascDesc = $4;
-
-						strncpy($$->orderByColname, $3 ,MAX_COLNAME_LENGTH); 
-
-						
+						strncpy($$->orderByColname, $3 ,MAX_COLNAME_LENGTH); 						
 					}
 ;
 
@@ -263,86 +444,3 @@ void yyerror (yyscan_t *locp, module *mod, char const *msg) {
 	fprintf(stderr, "--> %s\n", msg);
 }
 
-void
-emit(char *s, ...)
-{
-
-  va_list ap;
-  va_start(ap, s);
-
-  printf("rpn: ");
-  vfprintf(stdout, s, ap);
-  printf("\n");
-}
-
-List *
-lcons(void *datum, List *list)
-{
-	assert(IsPointerList(list));
-
-	if (list == NIL)
-		list = new_list(T_List);
-	else
-		new_head_cell(list);
-
-	lfirst(list->head) = datum;
-	return list;
-}
-
-static List *
-new_list(NodeTag type)
-{
-	List	   *new_list;
-	ListCell   *new_head;
-
-	new_head = (ListCell *) malloc(sizeof(*new_head));
-	new_head->next = NULL;
-	/* new_head->data is left undefined! */
-
-	new_list = (List *) malloc(sizeof(*new_list));
-	new_list->type = type;
-	new_list->length = 1;
-	new_list->head = new_head;
-	new_list->tail = new_head;
-
-	return new_list;
-}
-
-static void
-new_head_cell(List *list)
-{
-	ListCell   *new_head;
-
-	new_head = (ListCell *) malloc(sizeof(*new_head));
-	new_head->next = list->head;
-
-	list->head = new_head;
-	list->length++;
-}
-
-static void
-new_tail_cell(List *list)
-{
-	ListCell   *new_tail;
-
-	new_tail = (ListCell *) malloc(sizeof(*new_tail));
-	new_tail->next = NULL;
-
-	list->tail->next = new_tail;
-	list->tail = new_tail;
-	list->length++;
-}
-
-List *
-lappend(List *list, void *datum)
-{
-	assert(IsPointerList(list));
-
-	if (list == NIL)
-		list = new_list(T_List);
-	else
-		new_tail_cell(list);
-
-	lfirst(list->tail) = datum;
-	return list;
-}

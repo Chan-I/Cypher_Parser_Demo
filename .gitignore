@@ -5,3 +5,5 @@
 scanner.c
 scanner.h
 *.output
+run
+test

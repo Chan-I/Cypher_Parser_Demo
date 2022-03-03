@@ -1,5 +1,5 @@
 #include "module.h"
-#include "parser.tab.h"
+#include "parser.h"
 #include "scanner.h"
 
 void
@@ -9,16 +9,8 @@ emit(char *s, ...)
   va_start(ap, s);
 
   printf("rpn: ");
-  vfprintf(stdout, s, ap);
+  fprintf(stdout, s, ap);
   printf("\n");
-}
-
-module *
-new_module_from_stdin()
-{
-	module *mod = (module *) malloc(sizeof(module));
-	mod->src = stdin;
-	return mod;
 }
 
 module *
@@ -26,6 +18,14 @@ new_module_from_file(const char *filename)
 {
 	module *mod = (module *) malloc(sizeof(module));
 	mod->src = fopen(filename, "r");
+	return mod;
+}
+
+module *
+new_module_from_stdin(void)
+{
+	module *mod = (module *) malloc(sizeof(module));
+	mod->src = stdin;
 	return mod;
 }
 
@@ -46,111 +46,54 @@ parse_module(module *mod)
 	yylex_init(&sc);
 	yyset_in(mod->src, sc);
 
-#ifdef YYDEBUG
-	yydebug = 0;
+#ifdef _YYDEBUG
+	yydebug = 1;
 #endif
+
 	res = yyparse(sc, mod);
 
 	return res;
 }
 
-void
-ReturnStmtPrint(ReturnStmtClause *rt, char *in)
+char *
+print_module(module *mod)
 {
-  OrderByStmtClause *odb = rt->odb;
-  char *str = in;
-  if (rt->hasDistinct)
-  {
-    sprintf(str,"SELECT DISTINCT ");
-    str  += 16;
-  }
-  else
-  {
-	  sprintf(str,"SELECT ");
-    str += 7;
-  }
+  char *sql = malloc(8192 * 3);  // TODO : 8192 ???? 
+  memset(sql,0,8192 * 3);
+  char *order = malloc(8192);
 
-	ListCell *retcolCell = NULL;
-  List *retcolList = NIL;
+  ReturnStmtPrint(mod->rt, sql, order);     // print return clasue
+//  head += strlen(sql);
 
-  retcolList = rt->returnCols;
-  foreach(retcolCell,retcolList)
+  if(mod->exWhereExpr)
   {
-    ReturnCols *retcol = (ReturnCols *) lfirst(retcolCell);
-    if (retcol->hasFunc && retcol->hasDistinct)
-    {
-      sprintf(str,"%s(DISTINCT %s) ",retcol -> funName, retcol -> colname);
-      str += strlen(retcol -> funName) + strlen(retcol -> colname) + 12;
-    }
-    else if(retcol->hasFunc && !retcol->hasDistinct)
-    {
-      sprintf(str,"%s(%s) ",retcol -> funName, retcol -> colname);
-      str += strlen(retcol -> funName) + strlen(retcol -> colname) + 3;
-    }
-    else
-    {
-      sprintf(str,"%s ", retcol -> colname);
-      str += strlen(retcol -> colname) + 1;
-    }
-    
-    if (retcol->hasAlias)
-    {
-      sprintf(str,"AS %s ",retcol->colAlias);
-      str += strlen(retcol->colAlias) + 4;
-    }
-    *str++ = ',';
-  }		
-  *--str = 0;
-  if(rt->hasOrderBy) /*Order By ... DESC */
-  {
-    if (odb->ascDesc == 'A')
-    {
-      sprintf(str,"\nORDER BY %s ASC ",odb->orderByColname);
-      str += strlen(odb->orderByColname) + 15;
-    }
-    else if (odb->ascDesc == 'D')
-    {
-      sprintf(str,"\nORDER BY %s DESC ",odb->orderByColname);
-      str += strlen(odb->orderByColname) + 16;
-    }
-    else
-    {
-      sprintf(str,"\nORDER BY %s ",odb->orderByColname);  
-      str += strlen(odb->orderByColname) + 11;
-    }
+    WhereStmtPrint(mod->wh, sql);    // print where clause
+//    head += strlen(head);
   }
-  if(rt->hasLimit)
-    sprintf(str,"LIMIT %ld",rt->limitNum);
-}
+  
+  MatchStmtPrint(mod->mch, sql);     // print match clause
 
-void
-delete_return_clause_node(ReturnStmtClause *rt)
-{
-  if (rt -> odb)
-    free(rt -> odb);
-  if(rt->returnCols != NIL)
-    list_free(rt->returnCols);
+  strcat(sql, order);
+  return sql;
 }
 
 void
 delete_module(module *mod)
 {
-	if (mod->rt != NULL) {
-		delete_return_clause_node(mod->rt);
+	if (mod->rt != NULL) 
+  {
+    DELETE_RETURN_CLAUSE_NODE(mod->rt);
 	}
-  /* TODO delete where clause node */
-  /* TODO delete match clause node */
-
-	fclose(mod->src);
-	free(mod);
-}
-
-char *
-print_module(module *mod)
-{
-  char *sql = malloc(8192);  // TODO : 8192 ???? 
-  ReturnStmtPrint(mod->rt, sql);
-  /* TO DO */
-
-  return sql;
+  if (mod->exWhereExpr) 
+  {
+    DELETE_WHERE_CLAUSE_NODE(mod->wh);
+    mod -> exWhereExpr = false;
+  }
+  if (mod->mch != NULL) /*  delete match clause node */
+  {
+    DELETE_MATCH_CLAUSE_NODE(mod->mch); 
+  }
+  
+	FCLOSE(mod->src);
+	FREE(mod);
 }

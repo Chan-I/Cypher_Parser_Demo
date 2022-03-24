@@ -185,7 +185,7 @@ PatternPart:AnonymousPatternPart
 									_emit("Pattern_part");
 									PatternList *ptl ;
 									ptl = makeNode(PatternList);
-									ptl -> onlyAnnoyPtnPart = false;
+									ptl -> onlyAnnoyPtnPart = true;
 									ptl -> annoyPattern = $1;
 									$$ = (Node *)ptl;
 								}
@@ -194,7 +194,7 @@ PatternPart:AnonymousPatternPart
 									_emit("pattern_part  %d ",$2);
 									PatternList *ptl ;
 									ptl = makeNode(PatternList);
-									ptl -> onlyAnnoyPtnPart = true;
+									ptl -> onlyAnnoyPtnPart = false;
 									if (strlen($1) <= MAX_COLNAME_LENGTH)
 										strncpy(ptl -> colName, $1, strlen($1));
 									else

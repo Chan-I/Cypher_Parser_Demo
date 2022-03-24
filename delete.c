@@ -63,9 +63,6 @@ delete_comparision_clause_node(ComparisionExpr_Stru *se)
   }
   else if (se->exprType == 'F')               //  branch node (all child node have been free)
   {
-    FREE(se->lchild);
-    FREE(se->rchild);
-    FREE(se->nchild);
     FREE(se);  
   }
   else if (se->exprType == 'N')               // NOT
